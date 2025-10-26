@@ -7,6 +7,7 @@ import json
 import sys
 import time
 from datetime import datetime, timezone
+import argparse
 
 API_URL = "https://uselessfacts.jsph.pl/random.json?language=en"
 TIMEOUT = 10  # 秒
@@ -120,7 +121,7 @@ def fetch_fact(url=API_URL, timeout=TIMEOUT, retries=RETRIES):
     return None, None
 
 
-def main():
+def run_once():
     print("🔎 Fetching a random fact from uselessfacts.jsph.pl...")
 
     # 支援以環境變數覆寫，方便測試重複檢查
@@ -134,7 +135,7 @@ def main():
 
     if not fact:
         print("\n❌ Failed to retrieve a fact. Please check your network or try again later.")
-        sys.exit(1)
+        return False
 
     print("\n— Random Fact —")
     print(fact)
@@ -142,11 +143,44 @@ def main():
         print(f"\nSource: {link}")
 
     # 將取得的事實寫入本機存檔（避免重複）
-    created, entry = add_fact_if_unique(fact, link, QUOTES_FILE)
+    created, _ = add_fact_if_unique(fact, link, QUOTES_FILE)
     if created:
         print(f"\n✅ Added to {QUOTES_FILE}. Total size may have increased.")
     else:
         print(f"\n🟡 Duplicate detected. No changes to {QUOTES_FILE}.")
+    return True
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description="Digital Fact Collector")
+    parser.add_argument("--loop", action="store_true", help="持續運行，以固定間隔抓取新事實")
+    parser.add_argument("--interval", type=int, default=600, help="循環模式下的抓取間隔秒數（預設 600 秒）")
+    parser.add_argument("--max-runs", type=int, default=0, help="循環模式下最多執行次數（0 表示無限）")
+    args = parser.parse_args(argv)
+
+    if not args.loop:
+        ok = run_once()
+        sys.exit(0 if ok else 1)
+
+    # 迴圈模式
+    print(f"⏱️ Loop mode: interval={args.interval}s, max_runs={'∞' if args.max_runs == 0 else args.max_runs}")
+    runs = 0
+    try:
+        while True:
+            runs += 1
+            print(f"\n=== Run {runs} @ {datetime.now(timezone.utc).isoformat()} ===")
+            ok = run_once()
+            if not ok:
+                print("⚠️ This run failed to fetch a fact.")
+
+            if args.max_runs and runs >= args.max_runs:
+                print("✅ Reached max_runs. Exiting loop.")
+                break
+
+            time.sleep(max(1, args.interval))
+    except KeyboardInterrupt:
+        print("\n🛑 Interrupted by user. Exiting loop.")
+    sys.exit(0)
 
 
 if __name__ == "__main__":

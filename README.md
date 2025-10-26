@@ -121,6 +121,25 @@ python .\quote_collector.py
 - 新增單元測試與 CI（模擬 API 回應）；
 - 若偏好使用 `requests` 可將實作切換回 `requests`，但目前使用標準庫以降低外部依賴（同時使用 certifi 做驗證）。
 
+自動化/排程（Loop 模式與任務排程器）
+-----------------------------------
+
+此工具支援內建的循環模式，自動以固定時間間隔抓取新事實並寫入（僅寫入唯一值）：
+
+```powershell
+# 每 10 分鐘抓取一次（預設 600 秒），無限次直到你停止（Ctrl+C）
+python .\quote_collector.py --loop --interval 600
+
+# 測試用：每 1 秒共執行 2 次（第二次多半會觸發重複）
+python .\quote_collector.py --loop --interval 1 --max-runs 2
+```
+
+Windows 任務排程器（簡述）：
+- 啟動「工作排程器」→ 建立基本工作 → 觸發條件（例如每小時）→ 動作選「啟動程式」。
+- 程式（Program/script）填入你的 Python 可執行檔完整路徑；引數（Arguments）填入：
+	`c:\Users\<你>\Documents\Google\Digital-Fact-Collector\quote_collector.py --loop --interval 600`
+- 起始於（Start in）可填入專案資料夾路徑，並建議使用虛擬環境的 Python。
+
 貢獻
 ----
 歡迎提出 Issue 或 PR。若要在本地貢獻，請先建立虛擬環境並遵照上方「快速上手」步驟。
