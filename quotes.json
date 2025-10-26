@@ -63,5 +63,10 @@
     "text": "Test duplicate fact",
     "source": "https://example.com/test",
     "added_at": "2025-10-26T10:50:43.229738+00:00"
+  },
+  {
+    "text": "Loop Mode Test Fact",
+    "source": "https://example.com/loop",
+    "added_at": "2025-10-26T10:56:22.306360+00:00"
   }
 ]
