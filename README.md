@@ -59,6 +59,39 @@ Giraffes have no vocal cords.
 Source: https://uselessfacts.jsph.pl/api/v2/facts/aa973c0e0e06fd41ec814afd33252c81
 ```
 
+持久化與重複檢查
+-----------------
+
+本專案會將取得的事實持久化到 `quotes.json`（JSON 陣列）。每一筆資料的結構如下：
+
+```json
+{
+	"text": "<事實文字>",
+	"source": "<來源連結，可為 null>",
+	"added_at": "<ISO 8601 UTC 時間>"
+}
+```
+
+重複判斷：以 `text` 欄位為準，會做簡單正規化（去頭尾空白與合併連續空白）後比對，避免因空白差異導致重複未被偵測。
+
+歷史相容：如果你的 `quotes.json` 早期存有不同欄位（例如 `quote`/`author`），程式將保留舊資料；新加入的資料會使用 `text`/`source`/`added_at` 欄位。重複檢查僅針對 `text` 欄位的新格式進行。
+
+如何測試重複檢查（PowerShell）
+
+```powershell
+# 第一次（應新增）
+$env:FACT_OVERRIDE_TEXT='Test duplicate fact'
+$env:FACT_OVERRIDE_LINK='https://example.com/test'
+python .\quote_collector.py
+
+# 第二次（相同文字，應偵測重複不再新增）
+$env:FACT_OVERRIDE_TEXT='Test duplicate fact'
+$env:FACT_OVERRIDE_LINK='https://example.com/test'
+python .\quote_collector.py
+```
+
+預期：第一次執行會顯示「Added」，第二次會顯示「Duplicate detected」。
+
 關於 SSL 驗證與 certifi
 -----------------------
 
