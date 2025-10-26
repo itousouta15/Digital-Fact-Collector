@@ -1,7 +1,7 @@
 Digital-Fact-Collector
 ======================
 
-一個從 Zen Quotes（https://zenquotes.io）取得隨機名言並儲存在本機 JSON 的小工具。
+一個從 Zen Quotes https://zenquotes.io 取得隨機名言並儲存在本機 JSON 的小工具。
 
 目錄
 -----
