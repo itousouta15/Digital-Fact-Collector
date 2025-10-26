@@ -6,10 +6,74 @@ import os
 import json
 import sys
 import time
+from datetime import datetime, timezone
 
 API_URL = "https://uselessfacts.jsph.pl/random.json?language=en"
 TIMEOUT = 10  # 秒
 RETRIES = 1
+QUOTES_FILE = "quotes.json"  # 本機儲存檔案（JSON 格式）
+
+
+# --------- Persistence (JSON) ---------
+def load_facts(filename: str = QUOTES_FILE):
+    """載入本機已儲存的事實列表。
+
+    結構：list[{
+        "text": str,
+        "source": Optional[str],
+        "added_at": ISO8601 datetime string (UTC)
+    }]
+    若檔案不存在或格式錯誤，回傳空 list。
+    """
+    if not os.path.exists(filename):
+        return []
+    try:
+        with open(filename, "r", encoding="utf-8") as f:
+            data = json.load(f)
+            if isinstance(data, list):
+                return data
+            return []
+    except (json.JSONDecodeError, OSError):
+        return []
+
+
+def save_facts(facts, filename: str = QUOTES_FILE):
+    """將事實列表存回 JSON 檔案。"""
+    with open(filename, "w", encoding="utf-8") as f:
+        json.dump(facts, f, ensure_ascii=False, indent=2)
+
+
+def normalize_text(s: str) -> str:
+    """用於比對重複的簡單正規化：去除前後空白並使用單一空白。"""
+    if not isinstance(s, str):
+        return ""
+    # 簡單規則：strip + 把連續空白壓成單一空白
+    return " ".join(s.strip().split())
+
+
+def add_fact_if_unique(fact_text: str, source: str | None, filename: str = QUOTES_FILE):
+    """如果 fact_text 尚未存在檔案中，則新增並儲存。
+
+    回傳：
+    - (True, entry)  表示新增成功
+    - (False, entry) 表示已存在（不新增），entry 為既有或建議結構
+    """
+    facts = load_facts(filename)
+    existing_texts = {normalize_text(item.get("text", "")) for item in facts}
+    key = normalize_text(fact_text)
+
+    entry = {
+        "text": fact_text,
+        "source": source,
+        "added_at": datetime.now(timezone.utc).isoformat()
+    }
+
+    if key in existing_texts:
+        return False, entry
+
+    facts.append(entry)
+    save_facts(facts, filename)
+    return True, entry
 
 
 def fetch_fact(url=API_URL, timeout=TIMEOUT, retries=RETRIES):
@@ -58,16 +122,31 @@ def fetch_fact(url=API_URL, timeout=TIMEOUT, retries=RETRIES):
 
 def main():
     print("🔎 Fetching a random fact from uselessfacts.jsph.pl...")
-    fact, link = fetch_fact()
 
-    if fact:
-        print("\n— Random Fact —")
-        print(fact)
-        if link:
-            print(f"\nSource: {link}")
+    # 支援以環境變數覆寫，方便測試重複檢查
+    override_text = os.environ.get("FACT_OVERRIDE_TEXT")
+    override_link = os.environ.get("FACT_OVERRIDE_LINK")
+
+    if override_text:
+        fact, link = override_text, override_link
     else:
+        fact, link = fetch_fact()
+
+    if not fact:
         print("\n❌ Failed to retrieve a fact. Please check your network or try again later.")
         sys.exit(1)
+
+    print("\n— Random Fact —")
+    print(fact)
+    if link:
+        print(f"\nSource: {link}")
+
+    # 將取得的事實寫入本機存檔（避免重複）
+    created, entry = add_fact_if_unique(fact, link, QUOTES_FILE)
+    if created:
+        print(f"\n✅ Added to {QUOTES_FILE}. Total size may have increased.")
+    else:
+        print(f"\n🟡 Duplicate detected. No changes to {QUOTES_FILE}.")
 
 
 if __name__ == "__main__":
