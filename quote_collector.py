@@ -1,89 +1,74 @@
-# python quote_collector.py
-
-import requests
-import json
-from datetime import datetime, timezone
+from urllib.request import urlopen, Request
+from urllib.error import URLError, HTTPError
+import ssl
+import certifi
 import os
+import json
+import sys
+import time
 
-# --- Configuration (Updated for Quotes API) ---
-QUOTES_FILE = "quotes.json"
-API_URL = "https://zenquotes.io/api/random"
+API_URL = "https://uselessfacts.jsph.pl/random.json?language=en"
+TIMEOUT = 10  # 秒
+RETRIES = 1
 
-def fetch_random_quote():
-    """Connects to the Zen Quotes API and fetches a random quote and author."""
-    try:
-        response = requests.get(API_URL)
-        response.raise_for_status()
-        # This API returns a list with one quote object inside, e.g., [{"q": "...", "a": "..."}]
-        data = response.json()
-        
-        if data and isinstance(data, list) and len(data) > 0:
-            quote_data = data[0]
-            quote = quote_data.get('q')
-            author = quote_data.get('a', 'Unknown Author') # Provide a default value
-            return quote, author
-        else:
-            print("⚠️ API returned unexpected data format.")
-            return None, None
-            
-    except requests.exceptions.RequestException as e:
-        print(f"⚠️ Error connecting to API: {e}")
-        return None, None
-    except json.JSONDecodeError:
-        print("⚠️ Error decoding API response.")
-        return None, None
 
-def load_collection(filename):
-    """Loads a collection from a JSON file."""
-    if not os.path.exists(filename):
-        return []
-    
-    try:
-        with open(filename, 'r', encoding='utf-8') as f:
-            return json.load(f)
-    except (json.JSONDecodeError, FileNotFoundError):
-        return []
+def fetch_fact(url=API_URL, timeout=TIMEOUT, retries=RETRIES):
+    """Fetch a single random fact from the API.
 
-def save_collection(filename, collection):
-    """Saves a collection to a JSON file."""
-    with open(filename, 'w', encoding='utf-8') as f:
-        json.dump(collection, f, indent=4, ensure_ascii=False)
-
-# --- Main execution block ---
-if __name__ == "__main__":
-    print("🚀 Running the Inspirational Quote Collector...")
-
-    # 1. Load existing quotes
-    print(f"Loading existing quotes from {QUOTES_FILE}...")
-    quote_collection = load_collection(QUOTES_FILE)
-    print(f"Found {len(quote_collection)} quotes in the collection.")
-    
-    # Create a set of existing quote texts for fast duplicate checks
-    existing_quote_texts = {item['quote'] for item in quote_collection}
-
-    # 2. Fetch a new quote
-    print("Fetching a new quote from the API...")
-    new_quote_text, new_quote_author = fetch_random_quote()
-
-    if new_quote_text:
-        # 3. Check for duplicates
-        if new_quote_text in existing_quote_texts:
-            print(f"\n🟡 Duplicate quote found. No action taken.")
-            print(f"   \"{new_quote_text}\" - {new_quote_author}")
-        else:
-            # 4. Add the new, unique quote to our collection
-            print("\n✅ New unique quote found! Adding to collection.")
-            
-            new_quote_entry = {
-                "quote": new_quote_text,
-                "author": new_quote_author,
-                "added_at": datetime.now(timezone.utc).isoformat()
-            }
-            quote_collection.append(new_quote_entry)
-            
-            # 5. Save the updated collection
-            save_collection(QUOTES_FILE, quote_collection)
-            print(f"   \"{new_quote_text}\" - {new_quote_author}")
-            print(f"   Collection saved. Total quotes: {len(quote_collection)}")
+    Returns a tuple (fact_text, source_url) or (None, None) on failure.
+    """
+    # 預設情況下，使用 certifi 的 CA 套件
+    # 僅限開發：設置環境變量 DEBUG_SKIP_SSL=1 以允許未經驗證的回退。
+    allow_unverified = os.environ.get("DEBUG_SKIP_SSL", "0") == "1"
+    ctx = None
+    if allow_unverified:
+        ctx = ssl._create_unverified_context()
     else:
-        print("\n❌ Could not fetch a new quote. Please check your connection or the API status.")
+        ctx = ssl.create_default_context(cafile=certifi.where())
+
+    attempt = 0
+    while attempt <= retries:
+        try:
+            req = Request(url, headers={"User-Agent": "python-quote-collector/1.0"})
+            with urlopen(req, timeout=timeout, context=ctx) as resp:
+                raw = resp.read().decode("utf-8")
+                data = json.loads(raw)
+
+                # The API returns fields like 'text' and 'permalink'
+                fact = data.get("text") or data.get("fact")
+                permalink = data.get("permalink") or data.get("source_url")
+                return fact, permalink
+
+        except HTTPError as e:
+            print(f"⚠️ HTTP error: {e.code} {e.reason}")
+            return None, None
+        except URLError as e:
+            msg = str(e)
+            print(f"⚠️ URL error / network issue: {msg}")
+        except json.JSONDecodeError:
+            print("⚠️ Failed to decode JSON from API response")
+            return None, None
+
+        attempt += 1
+        if attempt <= retries:
+            time.sleep(1)
+
+    return None, None
+
+
+def main():
+    print("🔎 Fetching a random fact from uselessfacts.jsph.pl...")
+    fact, link = fetch_fact()
+
+    if fact:
+        print("\n— Random Fact —")
+        print(fact)
+        if link:
+            print(f"\nSource: {link}")
+    else:
+        print("\n❌ Failed to retrieve a fact. Please check your network or try again later.")
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()
