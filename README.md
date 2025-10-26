@@ -1,7 +1,8 @@
 Digital-Fact-Collector
 ======================
 
-一個從 Zen Quotes（https://zenquotes.io）取得隨機名言並儲存在本機 JSON 的小工具。
+一個示範專案：從公開 API 取得隨機事實並顯示到控制台的簡單工具。
+本專案目前使用 Useless Facts（https://uselessfacts.jsph.pl）取得隨機事實。
 
 目錄
 -----
